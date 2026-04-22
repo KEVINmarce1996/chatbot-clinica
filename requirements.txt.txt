@@ -1,0 +1,9 @@
+langchain-community
+langchain-groq
+langchain-text-splitters
+chromadb
+gradio==5.23.0
+groq
+pypdf
+sentence-transformers
+huggingface-hub>=1.5.0
