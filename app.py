@@ -13,7 +13,7 @@ from langchain_community.document_loaders import TextLoader
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 DOCS_FILE    = "clinica_docs.txt"
 PERSIST_DIR  = "./chroma_clinica"
-EMBED_MODEL  = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 # ══════════════════════════════════════════
 # VECTORIZACIÓN
