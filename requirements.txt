@@ -7,3 +7,4 @@ groq
 pypdf
 sentence-transformers
 huggingface-hub>=1.5.0
+torch==2.0.1+cpu
