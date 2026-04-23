@@ -5,4 +5,5 @@ langchain-text-splitters
 chromadb
 groq
 pypdf
-fastembed
+onnxruntime
+numpy
