@@ -26,7 +26,7 @@ def build_vectorstore():
     docs     = loader.load()
     splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=50)
     chunks   = splitter.split_documents(docs)
-    embedder = FastEmbedEmbeddings(model_name="BAAI/bge-small-en-v1.5")
+    embedder = FakeEmbeddings(size=384)
     vs       = Chroma.from_documents(chunks, embedder, persist_directory=PERSIST_DIR)
     print(f"✅ {len(chunks)} fragmentos indexados.")
     return vs
