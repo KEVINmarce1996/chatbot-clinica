@@ -2,10 +2,10 @@ import os
 import shutil
 import gradio as gr
 from langchain_groq import ChatGroq
-from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import TextLoader
+from langchain_community.embeddings import FastEmbedEmbeddings
 
 # ══════════════════════════════════════════
 # CONFIGURACIÓN
@@ -13,10 +13,9 @@ from langchain_community.document_loaders import TextLoader
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 DOCS_FILE    = "clinica_docs.txt"
 PERSIST_DIR  = "./chroma_clinica"
-EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 # ══════════════════════════════════════════
-# VECTORIZACIÓN
+# VECTORIZACIÓN — usa FastEmbed (sin torch, liviano)
 # ══════════════════════════════════════════
 def build_vectorstore():
     if os.path.exists(PERSIST_DIR):
@@ -26,7 +25,7 @@ def build_vectorstore():
     docs     = loader.load()
     splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=50)
     chunks   = splitter.split_documents(docs)
-    embedder = HuggingFaceEmbeddings(model_name=EMBED_MODEL)
+    embedder = FastEmbedEmbeddings(model_name="BAAI/bge-small-en-v1.5")
     vs       = Chroma.from_documents(chunks, embedder, persist_directory=PERSIST_DIR)
     print(f"✅ {len(chunks)} fragmentos indexados.")
     return vs
@@ -130,7 +129,6 @@ with gr.Blocks(title="Clínica San Martín — Sofia IA") as demo:
         avatar_images=(None, "https://img.icons8.com/color/48/nurse-female.png"),
     )
 
-    # ── BOTONES PERSISTENTES ──────────────────
     gr.HTML("<div style='font-size:12px;color:#555;margin:10px 0 5px;font-weight:600;'>📋 Consultas frecuentes:</div>")
     with gr.Row():
         b1 = gr.Button(BOTONES_CONSULTAS[0], size="sm", variant="secondary")
@@ -151,7 +149,6 @@ with gr.Blocks(title="Clínica San Martín — Sofia IA") as demo:
         b11 = gr.Button(BOTONES_EXAMENES[4], size="sm", variant="secondary")
         b12 = gr.Button(BOTONES_EXAMENES[5], size="sm", variant="secondary")
 
-    # ── INPUT ──────────────────────────────────
     with gr.Row():
         txt = gr.Textbox(
             placeholder="Escribe tu consulta aquí...",
@@ -170,7 +167,6 @@ with gr.Blocks(title="Clínica San Martín — Sofia IA") as demo:
     </div>
     """)
 
-    # ── LÓGICA ─────────────────────────────────
     def enviar(pregunta, historial):
         if not pregunta.strip():
             return historial, ""
@@ -191,12 +187,10 @@ with gr.Blocks(title="Clínica San Martín — Sofia IA") as demo:
     def limpiar():
         return [{"role": "assistant", "content": "¡Hola! Soy **Sofia**. ¿En qué te puedo ayudar?"}]
 
-    # Envío por texto
     txt.submit(enviar, [txt, chatbot], [chatbot, txt]).then(stream_resp, chatbot, chatbot)
     btn_send.click(enviar, [txt, chatbot], [chatbot, txt]).then(stream_resp, chatbot, chatbot)
     btn_clear.click(limpiar, outputs=chatbot)
 
-    # Botones — envían la pregunta directamente al chat
     def hacer_click(pregunta, historial):
         historial = list(historial or [])
         historial.append({"role": "user", "content": pregunta})
