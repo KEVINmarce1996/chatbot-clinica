@@ -5,5 +5,3 @@ langchain-text-splitters
 chromadb
 groq
 pypdf
-onnxruntime
-numpy
