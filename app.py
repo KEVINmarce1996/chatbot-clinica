@@ -1,60 +1,28 @@
 import os
-import shutil
 import gradio as gr
 from langchain_groq import ChatGroq
-from langchain_community.vectorstores import Chroma
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import TextLoader
-from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
 
 # ══════════════════════════════════════════
 # CONFIGURACIÓN
 # ══════════════════════════════════════════
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-DOCS_FILE    = "clinica_docs.txt"
-PERSIST_DIR  = "./chroma_clinica"
 
 # ══════════════════════════════════════════
-# VECTORIZACIÓN — usa embeddings de ChromaDB (sin torch)
+# CARGAR DOCUMENTO DIRECTAMENTE
 # ══════════════════════════════════════════
-def build_vectorstore():
-    if os.path.exists(PERSIST_DIR):
-        shutil.rmtree(PERSIST_DIR)
-    print("⏳ Indexando...")
-    loader   = TextLoader(DOCS_FILE, encoding="utf-8")
-    docs     = loader.load()
-    splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=50)
-    chunks   = splitter.split_documents(docs)
+def cargar_contexto():
+    try:
+        with open("clinica_docs.txt", "r", encoding="utf-8") as f:
+            return f.read()
+    except:
+        return ""
 
-    # Usar ChromaDB directamente sin langchain embeddings
-    import chromadb
-    client = chromadb.PersistentClient(path=PERSIST_DIR)
-    ef = DefaultEmbeddingFunction()
-    collection = client.get_or_create_collection(
-        name="clinica",
-        embedding_function=ef
-    )
-
-    texts = [c.page_content for c in chunks]
-    ids   = [str(i) for i in range(len(texts))]
-    collection.add(documents=texts, ids=ids)
-
-    print(f"✅ {len(chunks)} fragmentos indexados.")
-    return collection, ef
-
-def buscar(collection, ef, query, k=6):
-    results = collection.query(query_texts=[query], n_results=k)
-    return results["documents"][0] if results["documents"] else []
+CONTEXTO = cargar_contexto()
 
 # ══════════════════════════════════════════
-# RESPUESTA
+# RESPUESTA — sin embeddings, sin ChromaDB
 # ══════════════════════════════════════════
-collection, ef = build_vectorstore()
-
 def responder(mensaje, historial):
-    docs = buscar(collection, ef, mensaje)
-    contexto = "\n\n".join(docs)
-
     historial_texto = ""
     for h in (historial or []):
         rol = "Paciente" if h["role"] == "user" else "Sofia"
@@ -77,8 +45,8 @@ REGLAS ESTRICTAS:
 5. Responde en español, breve, cálido y directo.
 6. Solo preséntate como Sofia en el primer mensaje.
 
-CONTEXTO:
-{contexto}
+INFORMACIÓN DE LA CLÍNICA:
+{CONTEXTO}
 
 CONVERSACIÓN PREVIA:
 {historial_texto}
