@@ -5,8 +5,7 @@ from langchain_groq import ChatGroq
 from langchain_community.vectorstores import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import TextLoader
-from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
-from langchain_community.embeddings import FakeEmbeddings
+from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
 
 # ══════════════════════════════════════════
 # CONFIGURACIÓN
@@ -16,7 +15,7 @@ DOCS_FILE    = "clinica_docs.txt"
 PERSIST_DIR  = "./chroma_clinica"
 
 # ══════════════════════════════════════════
-# VECTORIZACIÓN — usa FastEmbed (sin torch, liviano)
+# VECTORIZACIÓN — usa embeddings de ChromaDB (sin torch)
 # ══════════════════════════════════════════
 def build_vectorstore():
     if os.path.exists(PERSIST_DIR):
@@ -26,17 +25,35 @@ def build_vectorstore():
     docs     = loader.load()
     splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=50)
     chunks   = splitter.split_documents(docs)
-    embedder = FakeEmbeddings(size=384)
-    vs       = Chroma.from_documents(chunks, embedder, persist_directory=PERSIST_DIR)
+
+    # Usar ChromaDB directamente sin langchain embeddings
+    import chromadb
+    client = chromadb.PersistentClient(path=PERSIST_DIR)
+    ef = DefaultEmbeddingFunction()
+    collection = client.get_or_create_collection(
+        name="clinica",
+        embedding_function=ef
+    )
+
+    texts = [c.page_content for c in chunks]
+    ids   = [str(i) for i in range(len(texts))]
+    collection.add(documents=texts, ids=ids)
+
     print(f"✅ {len(chunks)} fragmentos indexados.")
-    return vs
+    return collection, ef
+
+def buscar(collection, ef, query, k=6):
+    results = collection.query(query_texts=[query], n_results=k)
+    return results["documents"][0] if results["documents"] else []
 
 # ══════════════════════════════════════════
 # RESPUESTA
 # ══════════════════════════════════════════
-def responder(mensaje, historial, vectorstore):
-    resultados = vectorstore.similarity_search(mensaje, k=6)
-    contexto   = "\n\n".join([r.page_content for r in resultados])
+collection, ef = build_vectorstore()
+
+def responder(mensaje, historial):
+    docs = buscar(collection, ef, mensaje)
+    contexto = "\n\n".join(docs)
 
     historial_texto = ""
     for h in (historial or []):
@@ -55,10 +72,10 @@ def responder(mensaje, historial, vectorstore):
 REGLAS ESTRICTAS:
 1. Responde SOLO con información del CONTEXTO. Nunca inventes datos.
 2. Si la respuesta está en el contexto, respóndela de forma breve y directa.
-3. Si NO está en el contexto, responde exactamente: "Para esa consulta contáctanos: WhatsApp 987-654-321 o al (01) 611-5000."
+3. Si NO está en el contexto responde: "Para esa consulta contáctanos: WhatsApp 987-654-321 o al (01) 611-5000."
 4. NUNCA diagnostiques enfermedades ni recetes medicamentos.
-5. Responde en español, de forma breve, cálida y directa.
-6. Solo di "Hola soy Sofia" en el primer mensaje. Después ve directo a la respuesta.
+5. Responde en español, breve, cálido y directo.
+6. Solo preséntate como Sofia en el primer mensaje.
 
 CONTEXTO:
 {contexto}
@@ -74,10 +91,8 @@ SOFIA:"""
         yield respuesta
 
 # ══════════════════════════════════════════
-# CONSTRUIR APP
+# INTERFAZ
 # ══════════════════════════════════════════
-vs = build_vectorstore()
-
 BOTONES_CONSULTAS = [
     "¿Cuáles son los horarios?",
     "¿Atienden de noche o domingos?",
@@ -95,9 +110,6 @@ BOTONES_EXAMENES = [
     "¿Cuánto cuesta una ecografía?",
     "¿Cuánto cuesta una tomografía?",
 ]
-
-def chat_fn(mensaje, historial):
-    yield from responder(mensaje, historial, vs)
 
 with gr.Blocks(title="Clínica San Martín — Sofia IA") as demo:
 
@@ -181,7 +193,7 @@ with gr.Blocks(title="Clínica San Martín — Sofia IA") as demo:
             yield historial
             return
         pregunta = historial[-2]["content"]
-        for parcial in responder(pregunta, historial[:-2], vs):
+        for parcial in responder(pregunta, historial[:-2]):
             historial[-1]["content"] = parcial
             yield historial
 
