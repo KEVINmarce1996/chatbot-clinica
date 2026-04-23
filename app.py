@@ -5,7 +5,8 @@ from langchain_groq import ChatGroq
 from langchain_community.vectorstores import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import TextLoader
-from langchain_community.embeddings import FastEmbedEmbeddings
+from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
+from langchain_community.embeddings import FakeEmbeddings
 
 # ══════════════════════════════════════════
 # CONFIGURACIÓN
