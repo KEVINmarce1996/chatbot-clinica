@@ -7,8 +7,8 @@ app.use(express.json());
 // ══════════════════════════════════════════
 // CONFIGURACIÓN — rellenar con datos de Meta
 // ══════════════════════════════════════════
-const VERIFY_TOKEN = "sofia_clinica_2024";        // tú lo inventas, puede ser cualquier texto
-const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN; // viene de Meta (empieza con EAA...)
+const VERIFY_TOKEN = "sofia_clinica_2024";          // tú lo inventas, puede ser cualquier texto
+const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;   // viene de Meta (empieza con EAA...)
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID; // número largo de Meta
 const HUGGINGFACE_URL = "https://kevinmarce19-mediasistente-clinica.hf.space"; // tu Space
 
@@ -32,7 +32,7 @@ app.get("/webhook", (req, res) => {
 // WEBHOOK — recibir mensajes de WhatsApp
 // ══════════════════════════════════════════
 app.post("/webhook", async (req, res) => {
-  res.sendStatus(200); // responder rápido a Meta
+  res.sendStatus(200); // responder rápido a Meta, siempre antes de procesar
 
   try {
     const entry = req.body?.entry?.[0];
@@ -42,37 +42,55 @@ app.post("/webhook", async (req, res) => {
 
     if (!message || message.type !== "text") return;
 
-    const from = message.from;           // número del paciente
-    const texto = message.text.body;     // lo que escribió
+    const from = message.from;        // número del paciente
+    const texto = message.text.body;  // lo que escribió
 
     console.log(`📩 Mensaje de ${from}: ${texto}`);
 
-    // Llamar a Sofia en HuggingFace
     const respuesta = await preguntarASofia(texto);
-
-    // Enviar respuesta por WhatsApp
     await enviarMensaje(from, respuesta);
 
   } catch (error) {
-    console.error("❌ Error:", error.message);
+    console.error("❌ Error procesando mensaje:", error.message);
   }
 });
 
 // ══════════════════════════════════════════
-// FUNCIÓN — preguntar a Sofia en HuggingFace
+// FUNCIÓN — preguntar a Sofia en HuggingFace (Gradio 5)
 // ══════════════════════════════════════════
+// Gradio 5 funciona en DOS pasos:
+//  1) POST /call/preguntar   → devuelve un event_id
+//  2) GET  /call/preguntar/EVENT_ID → devuelve la respuesta en formato SSE
 async function preguntarASofia(mensaje) {
   try {
-    const response = await axios.post(
-      `${HUGGINGFACE_URL}/run/predict`,
-      {
-        data: [mensaje, []]
-      },
-      { timeout: 30000 }
+    // PASO 1 — enviar la pregunta
+    const envio = await axios.post(
+      `${HUGGINGFACE_URL}/call/preguntar`,
+      { data: [mensaje] },
+      { timeout: 30000, headers: { "Content-Type": "application/json" } }
     );
 
-    const respuesta = response.data?.data?.[0];
-    return respuesta || "Lo siento, en este momento no puedo responder. Llámanos al (01) 611-5000.";
+    const eventId = envio.data?.event_id;
+    if (!eventId) throw new Error("No se recibió event_id de HuggingFace");
+
+    // PASO 2 — leer el resultado (Server-Sent Events)
+    const resultado = await axios.get(
+      `${HUGGINGFACE_URL}/call/preguntar/${eventId}`,
+      { timeout: 30000, responseType: "text" }
+    );
+
+    // La respuesta llega como texto tipo:
+    // event: complete
+    // data: ["texto de la respuesta"]
+    const texto = resultado.data;
+    const match = texto.match(/data:\s*(\[.*\])/);
+
+    if (match) {
+      const parsed = JSON.parse(match[1]);
+      return parsed[0] || "Lo siento, en este momento no puedo responder. Llámanos al (01) 611-5000.";
+    }
+
+    return "Lo siento, en este momento no puedo responder. Llámanos al (01) 611-5000.";
 
   } catch (error) {
     console.error("❌ Error HuggingFace:", error.message);
@@ -86,7 +104,7 @@ async function preguntarASofia(mensaje) {
 async function enviarMensaje(to, texto) {
   try {
     await axios.post(
-      `https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`,
+      `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`,
       {
         messaging_product: "whatsapp",
         to: to,
