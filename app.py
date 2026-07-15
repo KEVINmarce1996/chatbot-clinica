@@ -59,6 +59,16 @@ SOFIA:"""
         yield respuesta
 
 # ══════════════════════════════════════════
+# ENDPOINT NUEVO — solo para bot.js (WhatsApp)
+# No aparece en la interfaz visual, es invisible para el paciente.
+# ══════════════════════════════════════════
+def preguntar(mensaje):
+    respuesta_completa = ""
+    for parcial in responder(mensaje, []):
+        respuesta_completa = parcial
+    return respuesta_completa
+
+# ══════════════════════════════════════════
 # INTERFAZ
 # ══════════════════════════════════════════
 BOTONES_CONSULTAS = [
@@ -191,6 +201,9 @@ with gr.Blocks(title="Clínica San Martín — Sofia IA") as demo:
             inputs=chatbot,
             outputs=chatbot,
         ).then(stream_resp, chatbot, chatbot)
+
+    # Endpoint API dedicado para bot.js (WhatsApp) — invisible en la interfaz
+    gr.api(preguntar, api_name="preguntar")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 7860))
