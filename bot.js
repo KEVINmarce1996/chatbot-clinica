@@ -13,6 +13,13 @@ const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID; // número largo de Meta
 const HUGGINGFACE_URL = "https://kevinmarce19-mediasistente-clinica.hf.space"; // tu Space
 
 // ══════════════════════════════════════════
+// RUTA PRINCIPAL — para que UptimeRobot confirme que el bot está vivo
+// ══════════════════════════════════════════
+app.get("/", (req, res) => {
+  res.status(200).send("Sofia WhatsApp Bot está activo ✅");
+});
+
+// ══════════════════════════════════════════
 // WEBHOOK — verificación de Meta
 // ══════════════════════════════════════════
 app.get("/webhook", (req, res) => {
